@@ -1,0 +1,189 @@
+ ---
+title: "Generalized Fiducial Inference"
+author: "Svetak Sundhar"
+date: "August 29, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+library(rstan)
+library(rstanarm)
+library(foreach)
+library(ggplot2)
+library(doParallel)
+registerDoParallel(32)
+
+set.seed(1)  #randomize data
+
+fitted_model = stan_model(file = "gfi.stan")
+
+vn<-c(5,25,125)   #different sizes of dataset
+vmu<-c(0.1,1,5)   #different mu vals used
+
+coverage=matrix(rep(0,9),3,3)
+expectedlength=matrix(rep(0,9),3,3)
+vmad=numeric(0)
+vpval=numeric(0)
+
+for(i in 1:3){
+  mu0=vmu[i]
+  for(j in 1:3){
+    n=vn[j]
+    
+    myoutput = foreach(k=1:1000,.inorder=FALSE,.combine='cbind') %dopar%{
+      x<-rnorm(n,mu0,mu0^(0.75))
+      ds <- list(Y=x, N = length(x))
+      meanx=mean(x)
+      varx=var(x)
+      
+      #data from stan processed
+    
+      f_g = sampling(fitted_model,data=ds)
+      
+      
+      list_of_draws <- extract(f_g)
+      pvalue<-mean(list_of_draws$mu <=mu0)
+      mad<-mean(abs(list_of_draws$mu-mu0))
+      
+      summary_stats<-summary(f_g,pars="mu",probs=c(.05,.95))$summary
+      ci_length<-summary_stats[5]-summary_stats[4]
+     covered<-(list_of_draws$mu>summary_stats[4] &&  list_of_draws$mu<summary_stats[5])
+       
+      
+      
+      c(pvalue,mad,covered,ci_length,meanx,varx) 
+    }
+    vpval=rbind(vpval,myoutput[1,])
+    vmad= rbind(vmad,myoutput[2,])
+    coverage[i,j]=mean(myoutput[3,])
+    expectedlength[i,j]=mean(myoutput[4,])
+  }
+  
+}
+
+```
+
+```{r}
+library(rstan)
+library(rstanarm)
+library(foreach)
+library(ggplot2)
+
+set.seed(216)  #randomize data
+
+fitted_model_bayes = stan_model(file = "gfi_1.stan")
+
+vn_b<-c(5,25,125)   #different sizes of dataset
+vmu_b<-c(0.1,1,5)   #different mu vals used
+
+coverage_b=matrix(rep(0,9),3,3)
+expectedlength_b=matrix(rep(0,9),3,3)
+vmad_b=numeric(0)
+vpval_b=numeric(0)
+
+for(a in 1:3){
+  mu0_b=vmu_b[a]
+  for(b in 1:3){
+    n_b=vn_b[b]
+    
+    myoutput_b = foreach(c=1:1000,.combine='cbind') %dopar%{
+      x_b<-rnorm(n_b,mu0_b,mu0_b^(0.75))
+      ds_b <- list(Y=x_b, N = length(x_b))
+      meanx_b=mean(x_b)
+      varx_b=var(x_b)
+      
+      #data from stan processed
+    
+      f_g_b = sampling(fitted_model,data=ds_b)
+      
+      
+      list_of_draws_b <- extract(f_g_b)
+      pvalue_b<-mean(list_of_draws_b$mu <=mu0_b)
+      mad_b<-mean(abs(list_of_draws_b$mu-mu0_b))
+      
+      summary_stats_b<-summary(f_g_b,pars="mu",probs=c(.05,.95))$summary
+      ci_length_b<-summary_stats_b[5]-summary_stats_b[4]
+     covered_b<-(list_of_draws_b$mu>summary_stats_b[4] &&  list_of_draws_b$mu<summary_stats_b[5])
+       
+      
+      
+      c(pvalue_b,mad_b,covered_b,ci_length_b,meanx_b,varx_b) 
+    }
+    vpval_b=rbind(vpval_b,myoutput_b[1,])
+    vmad_b= rbind(vmad_b,myoutput_b[2,])
+    coverage_b[a,b]=mean(myoutput_b[3,])
+    expectedlength_b[a,b]=mean(myoutput_b[4,])
+  }
+  
+}
+
+```
+
+
+
+```{r}
+qqplot(vpval[1,],(1:1000)/1001)
+qqline(vpval[1,],distribution = qunif)
+qqplot(vpval_b[1,],(1:1000)/1001)
+qqline(vpval_b[1,],distribution = qunif)
+qqplot(vpval[2,],(1:1000)/1001)
+qqline(vpval[2,],distribution = qunif)
+qqplot(vpval_b[2,],(1:1000)/1001)
+qqline(vpval_b[2,],distribution = qunif)
+qqplot(vpval[3,],(1:1000)/1001)
+qqline(vpval[3,],distribution = qunif)
+qqplot(vpval_b[3,],(1:1000)/1001)
+qqline(vpval_b[3,],distribution = qunif)
+qqplot(vpval[4,],(1:1000)/1001)
+qqline(vpval[4,],distribution = qunif)
+qqplot(vpval_b[4,],(1:1000)/1001)
+qqline(vpval_b[4,],distribution = qunif)
+qqplot(vpval[5,],(1:1000)/1001)
+qqline(vpval[5,],distribution = qunif)
+qqline(vpval_b[5,],distribution = qunif)
+qqplot(vpval_b[5,],(1:1000)/1001)
+qqplot(vpval[6,],(1:1000)/1001)
+qqline(vpval[6,],distribution = qunif)
+qqplot(vpval_b[6,],(1:1000)/1001)
+qqline(vpval_b[6,],distribution = qunif)
+qqplot(vpval[7,],(1:1000)/1001)
+qqline(vpval[7,],distribution = qunif)
+qqplot(vpval_b[7,],(1:1000)/1001)
+qqline(vpval_b[7,],distribution = qunif)
+qqplot(vpval[8,],(1:1000)/1001)
+qqline(vpval[8,],distribution = qunif)
+qqplot(vpval_b[8,],(1:1000)/1001)
+qqline(vpval_b[8,],distribution = qunif)
+qqplot(vpval[9,],(1:1000)/1001)
+qqline(vpval[9,],distribution = qunif)
+qqplot(vpval_b[9,],(1:1000)/1001)
+qqline(vpval_b[9,],distribution = qunif)
+boxplot(t(vmad))
+boxplot(t(vmad_b))
+print(matrix(coverage,3,3))
+print(matrix(expectedlength,3,3))
+print(matrix(coverage_b,3,3))
+print(matrix(expectedlength_b,3,3))
+save.image('Bayesian.Rdata')
+
+```
+
+```{r}
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
